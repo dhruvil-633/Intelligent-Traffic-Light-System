@@ -6,7 +6,7 @@ import sys
 
 # Default values of signal timers
 defaultGreen = {0: 15, 1: 15, 2: 15, 3: 15}
-defaultRed = 120  # Red signal duration
+defaultRed = 60  # Red signal duration
 defaultYellow = 5  # Yellow signal duration
 
 signals = []
@@ -127,11 +127,11 @@ class Vehicle(pygame.sprite.Sprite):
 def initialize():
     ts1 = TrafficSignal(0, defaultYellow, defaultGreen[0])
     signals.append(ts1)
-    ts2 = TrafficSignal(ts1.red + ts1.yellow + ts1.green, defaultYellow, defaultGreen[1])
+    ts2 = TrafficSignal(defaultRed - 40, defaultYellow, defaultGreen[1])
     signals.append(ts2)
-    ts3 = TrafficSignal(ts1.red + ts1.yellow + ts1.green + ts2.red + ts2.yellow + ts2.green, defaultYellow, defaultGreen[2])
+    ts3 = TrafficSignal(defaultRed - 20, defaultYellow, defaultGreen[2])
     signals.append(ts3)
-    ts4 = TrafficSignal(ts1.red + ts1.yellow + ts1.green + ts2.red + ts2.yellow + ts2.green + ts3.red + ts3.yellow + ts3.green, defaultYellow, defaultGreen[3])
+    ts4 = TrafficSignal(defaultRed, defaultYellow, defaultGreen[3])
     signals.append(ts4)
     repeat()
 
