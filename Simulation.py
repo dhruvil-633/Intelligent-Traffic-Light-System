@@ -8,7 +8,6 @@ import sys
 defaultGreen = {0: 15, 1: 15, 2: 15, 3: 15}
 defaultRed = 60  # Red signal duration
 defaultYellow = 5  # Yellow signal duration
-defaultBlue = 5  # Blue signal duration
 
 signals = []
 noOfSignals = 4  # Total number of signals
@@ -56,7 +55,7 @@ class TrafficSignal:
 
 class Vehicle(pygame.sprite.Sprite):
     def __init__(self, lane, vehicleClass, direction_number, direction):
-        pygame.sprite.Sprite.__init__(self)
+        super().__init__()
         self.lane = lane
         self.vehicleClass = vehicleClass
         self.speed = speeds[vehicleClass]
@@ -137,7 +136,6 @@ def initialize():
     signals.append(ts4)
     repeat()
 
-
 def repeat():
     global currentGreen, currentYellow, nextGreen
     while(signals[currentGreen].green > 0):
@@ -176,76 +174,9 @@ def updateValues():
         else:
             signals[i].red -= 1
 
-def heat_situation(direction_number, current_green):
-    global signals, currentGreen, nextGreen, noOfSignals, currentYellow, simulation, defaultGreen, defaultYellow, defaultRed
-
-    # Save the default timings to restore them later
-    default_signals = [signal.__dict__.copy() for signal in signals]
-
-    # Setting the current green signal to 5 blue and 15 red
-    signals[current_green].blue = 5
-    signals[current_green].red = 15
-    signals[current_green].green = 0
-    signals[current_green].yellow = 0
-
-    # Setting the emergency vehicle direction to 5 blue, 10 green, and 5 yellow
-    signals[direction_number].blue = 5
-    signals[direction_number].green = 10
-    signals[direction_number].yellow = 5
-    signals[direction_number].red = 0
-
-    # Updating the remaining two signals to add 20 red to their ongoing timers
-    for i in range(noOfSignals):
-        if i != current_green and i != direction_number:
-            signals[i].red += 20
-            signals[i].blue = 0
-            signals[i].green = 0
-            signals[i].yellow = 0
-
-    # Set the current and next green signals
-    currentGreen = direction_number
-    nextGreen = (currentGreen + 1) % noOfSignals
-
-    # Function to handle the heat situation loop
-    def heat_situation_loop():
-        global signals, currentGreen, currentYellow, nextGreen
-
-        while signals[currentGreen].blue > 0:
-            signals[currentGreen].blue -= 1
-            updateValues()
-            time.sleep(1)
-
-        while signals[currentGreen].green > 0:
-            signals[currentGreen].green -= 1
-            updateValues()
-            time.sleep(1)
-
-        currentYellow = 1
-
-        while signals[currentGreen].yellow > 0:
-            signals[currentGreen].yellow -= 1
-            updateValues()
-            time.sleep(1)
-
-        currentYellow = 0
-
-        # Restore the default signal timings
-        for i in range(noOfSignals):
-            signals[i].__dict__ = default_signals[i]
-
-        # Set the current and next green signals back to normal operation
-        currentGreen = nextGreen
-        nextGreen = (currentGreen + 1) % noOfSignals
-        signals[nextGreen].red = signals[currentGreen].yellow + signals[currentGreen].green
-
-    # Start the heat situation loop in a separate thread to avoid blocking
-    heat_thread = threading.Thread(target=heat_situation_loop)
-    heat_thread.start()    
-    
-
 
 # Constants for vehicle generation
-SPAWN_INTERVAL = 90  # Spawn interval in seconds (1.5 minutes)
+SPAWN_INTERVAL = 60  # Spawn interval in seconds (1.5 minutes)
 last_emergency_spawn_time = time.time()
 last_spawn_time = time.time()
 
@@ -273,98 +204,132 @@ def generateVehicles():
             direction_number = random.randint(0, 3)
             Vehicle(lane_number, emergency_vehicleTypes[emergency_vehicle_type], direction_number, directionNumbers[direction_number])
             
-            #Add the emergency detection code here and heat situation intiation
-            
-            heat_situation(direction_number, currentGreen)    
-            
-            
-            
+            #Add the emergency detection code here and heat situation initiation
+            heat_situation(direction_number)
+
             # Update last emergency spawn time
             last_emergency_spawn_time = current_emergency_time
         
         # Check if it's time to spawn a regular vehicle
-        if time_diff >= (SPAWN_INTERVAL - 85):
+        if time_diff >= (SPAWN_INTERVAL - 55):
             Vehicle(lane_number, vehicleTypes[vehicle_type], direction_number, directionNumbers[direction_number])
             last_spawn_time = current_time
         
         time.sleep(1)
 
+def heat_situation(emergency_direction):  
+    global currentYellow, nextGreen  
+    # Set all signals to blue for 5 seconds
+    for signal in signals:
+        signal.blue = 5
+        signal.green = 0
+        signal.yellow = 0
+        signal.red = 0
 
+    # Start threads to manage simultaneous signal updates
+    threads = [threading.Thread(target=signal_timer, args=(i,)) for i in range(noOfSignals)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+  
+    # Reset signals back to normal
+    reset_signals(emergency_direction)  
+  
+def signal_timer(direction):  
+    while signals[direction].blue > 0:  
+        signals[direction].blue -= 1  
+        time.sleep(1)  
 
-# Updated Main class to handle rendering
+def reset_signals(emergency_direction):
+    global currentGreen, nextGreen
+
+    # Set the green, yellow, and red durations for the emergency direction
+    signals[emergency_direction].green = defaultGreen[emergency_direction]
+    signals[emergency_direction].yellow = defaultYellow
+    signals[emergency_direction].red = defaultRed
+
+    # Set the red durations for the other directions based on their position relative to the emergency direction
+    for i in range(noOfSignals):
+        if i != emergency_direction:
+            signals[i].red = (i - emergency_direction) * 20 if i > emergency_direction else (noOfSignals - (emergency_direction - i)) * 20
+
+    # Update the current and next green signal indicators
+    currentGreen = emergency_direction
+    nextGreen = (currentGreen + 1) % noOfSignals
+
+    # Ensure the next green signal has the correct red duration
+    signals[nextGreen].red = signals[currentGreen].yellow + signals[currentGreen].green
+
+    
+
 class Main:
-    def __init__(self):
-        self.thread1 = threading.Thread(name="initialization", target=initialize, args=())
-        self.thread1.daemon = True
-        self.thread1.start()
+    thread1 = threading.Thread(name="initialization", target=initialize, args=())
+    thread1.daemon = True
+    thread1.start()
 
-        self.black = (0, 0, 0)
-        self.white = (255, 255, 255)
-        self.screenWidth = 1400
-        self.screenHeight = 800
-        self.screenSize = (self.screenWidth, self.screenHeight)
-        self.background = pygame.image.load('img/intersection.png')
+    black = (0, 0, 0)
+    white = (255, 255, 255)
+    screenWidth = 1400
+    screenHeight = 800
+    screenSize = (screenWidth, screenHeight)
+    background = pygame.image.load('img/intersection.png')
 
-        self.screen = pygame.display.set_mode(self.screenSize)
-        pygame.display.set_caption("SIMULATION")
-        self.redSignal = pygame.image.load('img/signals/red.png')
-        self.yellowSignal = pygame.image.load('img/signals/yellow.png')
-        self.greenSignal = pygame.image.load('img/signals/green.png')
-        self.blueSignal = pygame.image.load('img/signals/blue.png')
-        self.font = pygame.font.Font(None, 30)
+    screen = pygame.display.set_mode(screenSize)
+    pygame.display.set_caption("SIMULATION")
+    redSignal = pygame.image.load('img/signals/red.png')
+    yellowSignal = pygame.image.load('img/signals/yellow.png')
+    greenSignal = pygame.image.load('img/signals/green.png')
+    blueSignal = pygame.image.load('img/signals/blue.png')
+    font = pygame.font.Font(None, 30)
 
-        self.thread2 = threading.Thread(name="generateVehicles", target=generateVehicles, args=())
-        self.thread2.daemon = True
-        self.thread2.start()
+    thread2 = threading.Thread(name="generateVehicles", target=generateVehicles, args=())
+    thread2.daemon = True
+    thread2.start()
 
-        self.run_simulation()
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit()
 
-    def run_simulation(self):
-        while True:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    sys.exit()
-
-            self.screen.blit(self.background, (0, 0))
-            # Loop through all signals
-            for i in range(noOfSignals):
-                # Check if the current signal is the green signal
-                if i == currentGreen:
-                    # Display the blue signal timer if it is active
-                    if signals[i].blue > 0:
-                        signals[i].signalText = signals[i].blue
-                        self.screen.blit(self.blueSignal, signalCoods[i])
-                    # If the yellow signal is active, display the yellow signal timer
-                    elif currentYellow == 1:
-                        signals[i].signalText = signals[i].yellow
-                        self.screen.blit(self.yellowSignal, signalCoods[i])
-                    else:
-                        # Otherwise, display the green signal timer
-                        signals[i].signalText = signals[i].green
-                        self.screen.blit(self.greenSignal, signalCoods[i])
+        screen.blit(background, (0, 0))
+        # Loop through all signals
+        for i in range(noOfSignals):
+            if signals[i].blue > 0:
+                signals[i].signalText = signals[i].blue
+                screen.blit(blueSignal, signalCoods[i])
+            elif i == currentGreen:
+                # If the yellow signal is active, display the yellow signal timer
+                if currentYellow == 1:
+                    signals[i].signalText = signals[i].yellow
+                    screen.blit(yellowSignal, signalCoods[i])
                 else:
-                    # For all other signals, display the red signal timer
-                    signals[i].signalText = signals[i].red
-                    self.screen.blit(self.redSignal, signalCoods[i])
+                    # Otherwise, display the green signal timer
+                    signals[i].signalText = signals[i].green
+                    screen.blit(greenSignal, signalCoods[i])
+            else:
+                # For all other signals, display the red signal timer
+                signals[i].signalText = signals[i].red
+                screen.blit(redSignal, signalCoods[i])
 
-            # Initialize an empty list to hold signal text surfaces
-            signalTexts = ["", "", "", ""]
+        # Initialize an empty list to hold signal text surfaces
+        signalTexts = ["", "", "", ""]
 
-            # Loop through all signals again to render the signal timer text
-            for i in range(noOfSignals):
-                # Render the signal timer text with a white font on a black background
-                signalTexts[i] = self.font.render(str(signals[i].signalText), True, self.white, self.black)
-                # Display the rendered signal timer text at the corresponding coordinates
-                self.screen.blit(signalTexts[i], signalTimerCoods[i])
+        # Loop through all signals again to render the signal timer text
+        for i in range(noOfSignals):
+            # Render the signal timer text with a white font on a black background
+            signalTexts[i] = font.render(str(signals[i].signalText), True, white, black)
+            # Display the rendered signal timer text at the corresponding coordinates
+            screen.blit(signalTexts[i], signalTimerCoods[i])
 
-            # Loop through all vehicles in the simulation
-            for vehicle in simulation:
-                # Display the vehicle image at its current position
-                self.screen.blit(vehicle.image, [vehicle.x, vehicle.y])
-                # Move the vehicle according to its direction and speed
-                vehicle.move()
+        # Loop through all vehicles in the simulation
+        for vehicle in simulation:
+            # Display the vehicle image at its current position
+            screen.blit(vehicle.image, [vehicle.x, vehicle.y])
+            # Move the vehicle according to its direction and speed
+            vehicle.move()
 
-            # Update the display to reflect the changes
-            pygame.display.update()
+        # Update the display to reflect the changes
+        pygame.display.update()
 
 Main()
