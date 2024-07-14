@@ -176,14 +176,17 @@ def updateValues():
 
 
 # Constants for vehicle generation
-SPAWN_INTERVAL = 60  # Spawn interval in seconds (1.5 minutes)
+
+
 last_emergency_spawn_time = time.time()
 last_spawn_time = time.time()
 
-def generateVehicles():
+def generateVehicles():  
     global last_emergency_spawn_time, last_spawn_time
 
     while True:
+        emg_SPAWN_INTERVAL = random.randint(60,90)  # Emergency vehicle spawn interval in seconds (1-1.5 minutes)
+        SPAWN_INTERVAL = random.randint(1,5) # Regular vehicle spawn interval in seconds (1-5 seconds)
         # Determine time difference since last emergency vehicle spawn
         current_emergency_time = time.time()
         time_emergency_diff = current_emergency_time - last_emergency_spawn_time
@@ -198,7 +201,7 @@ def generateVehicles():
         direction_number = random.randint(0, 3)
         
         # Check if it's time to spawn an emergency vehicle
-        if time_emergency_diff >= SPAWN_INTERVAL:
+        if time_emergency_diff >= emg_SPAWN_INTERVAL:
             # Spawn an emergency vehicle
             emergency_vehicle_type = random.randint(0, 1)  # Choose between ambulance and firetruck
             direction_number = random.randint(0, 3)
@@ -211,7 +214,7 @@ def generateVehicles():
             last_emergency_spawn_time = current_emergency_time
         
         # Check if it's time to spawn a regular vehicle
-        if time_diff >= (SPAWN_INTERVAL - 55):
+        if time_diff >= (SPAWN_INTERVAL):
             Vehicle(lane_number, vehicleTypes[vehicle_type], direction_number, directionNumbers[direction_number])
             last_spawn_time = current_time
         
